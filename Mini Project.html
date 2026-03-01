@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="WMS Stock">
+    <title>WMS Mini Project</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js">
+
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f0f2f5; margin: 0; }
+        
+        /* ---------------- โซนเมนู Hamburger ---------------- */
+        .nav-wrapper { position: fixed; top: 15px; left: 20px; z-index: 1000; }
+        .hamburger-icon { font-size: 30px; cursor: pointer; background: #333; color: white; padding: 5px 15px; border-radius: 8px; user-select: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .dropdown-menu { display: none; background: white; box-shadow: 0 4px 8px rgba(0,0,0,0.2); border-radius: 8px; margin-top: 10px; overflow: hidden; width: 220px; }
+        .show-menu { display: block; }
+        .menu-item { padding: 15px 20px; cursor: pointer; border-bottom: 1px solid #eee; color: #333; font-weight: bold; transition: 0.2s; }
+        .menu-item:last-child { border-bottom: none; }
+        .menu-item:hover, .menu-item.keyboard-focus { background-color: #007bff; color: white; }
+
+        /* ---------------- โซนเนื้อหา ---------------- */
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 800px; margin: 60px auto 20px auto; }
+        
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #444; }
+        input { padding: 10px; width: 100%; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
+        .btn-add { background: #28a745; color: white; padding: 12px; width: 100%; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; font-weight: bold; margin-top: 10px; transition: 0.2s;}
+        .btn-add:hover { background: #218838; }
+
+        /* ตาราง */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; font-weight: bold; }
+        tr:hover { background-color: #f1f1f1; }
+        .checkbox-cell { text-align: center; }
+        input[type="checkbox"] { transform: scale(1.5); cursor: pointer; width: auto; }
+
+        /* ---------------- โซน Quick Stock (หน้าแรก) ---------------- */
+        .stock-card { display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .stock-info h3 { margin: 0 0 5px 0; color: #333; font-size: 18px; }
+        .stock-info p { margin: 0; color: #666; font-size: 14px; }
+        .qty-controls { display: flex; align-items: center; gap: 10px; }
+        .btn-qty { border: none; padding: 5px 20px; font-size: 24px; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
+        .btn-qty.minus { background: #dc3545; }
+        .btn-qty.minus:hover { background: #c82333; }
+        .btn-qty.plus { background: #007bff; }
+        .btn-qty.plus:hover { background: #0056b3; }
+        .qty-input { font-size: 22px; font-weight: bold; width: 80px; text-align: center; color: #333; border: 2px solid #ccc; border-radius: 8px; padding: 5px; margin: 0; }
+        .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        /* ---------------- โซนสแกนเนอร์ ---------------- */
+        .btn-scan { background: #17a2b8; color: white; width: 100%; padding: 15px; font-size: 18px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(23, 162, 184, 0.3); transition: 0.2s;}
+        .btn-scan:hover { background: #138496; }
+        .btn-scan-stop { background: #dc3545; box-shadow: 0 4px 6px rgba(220, 53, 69, 0.3); }
+        .btn-scan-stop:hover { background: #c82333; }
+        
+        #reader { width: 100%; max-width: 500px; margin: 0 auto 20px auto; display: none; border-radius: 8px; overflow: hidden; border: 3px solid #17a2b8; background: #000; }
+
+        .hidden { display: none; }
+
+        /* ---------------- โซนสำหรับปริ้นท์ใบสั่งซื้อ ---------------- */
+        @media print {
+            body { background: white; padding: 0; margin: 0; }
+            .nav-wrapper, button, .menu-item { display: none !important; }
+            .container { box-shadow: none; border: none; margin: 0; padding: 0; max-width: 100%; }
+            #po-document { border: none !important; }
+        }
+    </style>
+</head>
+<body onload="renderHome()">
+
+<div class="nav-wrapper" onmouseenter="openMenu()" onmouseleave="closeMenu()">
+    <div class="hamburger-icon">☰ เมนู</div>
+    <div id="myDropdown" class="dropdown-menu">
+        <div class="menu-item" onclick="switchPage('page-home')">🏠 จัดการสต็อกด่วน</div>
+        <div class="menu-item" onclick="switchPage('page-add')">📦 เพิ่มสินค้าใหม่</div>
+        <div class="menu-item" onclick="switchPage('page-list')">📋 ตารางสั่งซื้อ</div>
+    </div>
+</div>
+
+<div id="page-home" class="container">
+    <h2 style="text-align: center; margin-bottom: 20px; color: #2c3e50;">⚡ จัดการสต็อกด่วน</h2>
+    
+    <button class="btn-scan" onclick="startScanner()" id="btnStartScan">📷 เปิดกล้องสแกนบาร์โค้ด</button>
+    <button class="btn-scan btn-scan-stop hidden" onclick="stopScanner()" id="btnStopScan">❌ ปิดกล้องสแกน</button>
+    
+    <div id="reader"></div>
+
+    <div id="quick-stock-list"></div>
+</div>
+
+<div id="page-add" class="container hidden">
+    <h2 style="color: #2c3e50;">📦 เพิ่มสินค้ารายการใหม่</h2>
+    <div class="input-group">
+        <label>รหัสบาร์โค้ด (ถ้ามี)</label>
+        <input type="text" id="pBarcode" placeholder="เช่น 885123456789">
+    </div>
+    <div class="input-group">
+        <label>ชื่อสินค้า</label>
+        <input type="text" id="pName" placeholder="เช่น อาหารสุกรอนุบาล, ยาปฏิชีวนะ">
+    </div>
+    <div class="input-group" style="display: flex; gap: 10px;">
+        <div style="flex: 2;"><label>จำนวนเริ่มต้น</label><input type="number" id="pQty" placeholder="ระบุตัวเลข"></div>
+        <div style="flex: 1;"><label>หน่วย</label><input type="text" id="pUnit" placeholder="เช่น กก., กระสอบ"></div>
+    </div>
+    <button class="btn-add" onclick="saveData()">➕ เพิ่มเข้าระบบ</button>
+</div>
+
+<div id="page-list" class="container hidden">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="color: #2c3e50; margin: 0;">📋 ตารางรายการและสั่งซื้อ</h2>
+        <button onclick="generatePO()" style="background: #ffc107; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(255, 193, 7, 0.3);">
+            🛒 สร้างใบสั่งซื้อ (PO)
+        </button>
+    </div>
+    
+    <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+        <label style="font-weight: bold;">ส่งออกข้อมูล:</label>
+        <select id="exportFormat" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-size: 16px;">
+            <option value="xlsx">Excel (.xlsx)</option>
+            <option value="csv">CSV (.csv)</option>
+        </select>
+        <button onclick="exportData()" style="background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold;">📥 ดาวน์โหลด</button>
+        <span style="color: #aaa;">|</span>
+        <button onclick="copyForGoogleSheets()" style="background: #109d59; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold;">📊 คัดลอกลง Google Sheets</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ลำดับ</th><th>รหัสบาร์โค้ด</th><th>ชื่อสินค้า</th><th>จำนวนคงเหลือ</th><th>หน่วย</th>
+                <th style="text-align: center; background: #fff3cd;">ติ๊กสั่งซื้อ + จำนวน / หน่วย</th>
+                <th style="text-align: center;">จัดการ</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+</div>
+<div id="page-po" class="container hidden" style="max-width: 800px;">
+    
+    <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+        <button onclick="switchPage('page-list')" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🔙 กลับไปหน้าตาราง</button>
+        <button onclick="window.print()" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px;">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    </div>
+
+    <div id="po-document" style="padding: 40px; border: 1px solid #ccc; border-radius: 8px; background: white;">
+        <h2 style="text-align: center; margin-bottom: 5px;">ใบสั่งซื้อสินค้า (Purchase Order)</h2>
+        <p style="text-align: right; color: #555; margin-top: 0;" id="po-date"></p>
+        
+        <hr style="border: 0; border-top: 2px solid #333; margin: 20px 0;">
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+                <tr style="background-color: #f8f9fa;">
+                    <th style="border: 1px solid #333; padding: 10px; text-align: center;">ลำดับ</th>
+                    <th style="border: 1px solid #333; padding: 10px; text-align: left;">รหัสสินค้า</th>
+                    <th style="border: 1px solid #333; padding: 10px; text-align: left;">รายการสินค้า</th>
+                    <th style="border: 1px solid #333; padding: 10px; text-align: center;">จำนวนที่สั่ง</th>
+                    <th style="border: 1px solid #333; padding: 10px; text-align: center;">หน่วย</th>
+                </tr>
+            </thead>
+            <tbody id="po-table-body">
+                </tbody>
+        </table>
+        
+        <div style="margin-top: 80px; display: flex; justify-content: space-between;">
+            <div style="text-align: center; width: 200px;">
+                <p>_______________________</p>
+                <p>ผู้สั่งซื้อ</p>
+            </div>
+            <div style="text-align: center; width: 200px;">
+                <p>_______________________</p>
+                <p>ผู้ขาย / ซัพพลายเออร์</p>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // ---------------- 1. ระบบฐานข้อมูล (Local Storage) ----------------
+    let savedData = localStorage.getItem('myStock');
+    
+    // ถ้าไม่มีข้อมูลเก่าเลย ให้สร้างข้อมูลจำลองที่มีบาร์โค้ดให้ลองเล่น
+    let inventoryData = savedData ? JSON.parse(savedData) : [];
+
+    function saveToLocalStorage() {
+        localStorage.setItem('myStock', JSON.stringify(inventoryData));
+    }
+
+    // ---------------- 2. ฟังก์ชันแสดงผลหน้าจอ ----------------
+    function renderHome() {
+        const list = document.getElementById('quick-stock-list');
+        list.innerHTML = ''; 
+        
+        if(inventoryData.length === 0) {
+            list.innerHTML = '<p style="text-align:center; color:#999; padding: 20px;">ยังไม่มีสินค้าในระบบ กรุณาไปเพิ่มสินค้าใหม่</p>';
+            return;
+        }
+
+            inventoryData.forEach((item, index) => {
+            let barcodeText = item.barcode ? `<br><span style="font-size:13px; color:#17a2b8;">(รหัส: ${item.barcode})</span>` : '';
+            list.innerHTML += `
+            <div class="stock-card">
+                <div class="stock-info">
+                    <h3>${item.name} ${barcodeText}</h3>
+                    <p>หน่วยนับ: ${item.unit}</p>
+                </div>
+                
+                <div class="qty-controls">
+                    <button class="btn-qty minus" onclick="updateQty(${index}, -1)">-</button>
+                    <input type="number" class="qty-input" value="${item.qty}" onchange="setQtyDirectly(${index}, this.value)">
+                    <button class="btn-qty plus" onclick="updateQty(${index}, 1)">+</button>
+                    
+                    <button onclick="deleteItem(${index})" style="background: none; border: none; font-size: 24px; cursor: pointer; margin-left: 15px;" title="ลบรายการนี้">🗑️</button>
+                </div>
+            </div>`;
+        });
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = ''; 
+        inventoryData.forEach((item, index) => {
+            tbody.innerHTML += `<tr>
+                <td style="text-align:center;">${index + 1}</td>
+                <td style="color:#17a2b8;">${item.barcode || '-'}</td>
+                <td>${item.name}</td>
+                <td style="font-size:18px; text-align:center;"><b>${item.qty}</b></td>
+                <td>${item.unit}</td>
+                <td style="text-align: center; white-space: nowrap; background: #fffdf5;">
+                    <input type="checkbox" id="chk_${index}" style="transform: scale(1.5); margin-right: 10px; cursor: pointer; vertical-align: middle;">
+                    
+                    <input type="number" id="orderQty_${index}" placeholder="จำนวน" style="width: 70px; padding: 5px; text-align: center; border-radius: 4px; border: 1px solid #ccc; font-size: 16px;" min="1">
+                    
+                    <input type="text" id="orderUnit_${index}" value="${item.unit}" placeholder="หน่วย" style="width: 70px; padding: 5px; text-align: center; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; margin-left: 5px;">
+                </td>
+                <td style="text-align: center;">
+                    <button onclick="deleteItem(${index})" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">ลบ</button>
+                </td>
+            </tr>`;
+        });
+    }
+
+    // ---------------- 3. ฟังก์ชันคำนวณและบันทึก ----------------
+    function updateQty(index, changeAmount) {
+        let newQty = parseInt(inventoryData[index].qty) + changeAmount;
+        if(newQty < 0) newQty = 0; 
+        inventoryData[index].qty = newQty;
+        saveToLocalStorage(); 
+        renderHome(); 
+    }
+
+    function setQtyDirectly(index, newValue) {
+        let parsedValue = parseInt(newValue);
+        if(isNaN(parsedValue) || parsedValue < 0) parsedValue = 0;
+        inventoryData[index].qty = parsedValue;
+        saveToLocalStorage(); 
+        renderHome();
+    }
+
+    function saveData() {
+        const barcode = document.getElementById('pBarcode').value;
+        const name = document.getElementById('pName').value;
+        const qty = document.getElementById('pQty').value;
+        const unit = document.getElementById('pUnit').value;
+
+        if(name && qty && unit) {
+            inventoryData.push({ barcode: barcode, name: name, qty: qty, unit: unit });
+            saveToLocalStorage();
+            
+            // ล้างข้อมูลในช่องกรอก
+            document.getElementById('pBarcode').value = '';
+            document.getElementById('pName').value = '';
+            document.getElementById('pQty').value = '';
+            document.getElementById('pUnit').value = '';
+            
+            alert("เพิ่มสินค้าเข้าระบบเรียบร้อย!");
+            switchPage('page-home');
+        } else {
+            alert("กรุณากรอก ชื่อสินค้า, จำนวน และหน่วย ให้ครบถ้วนครับ");
+        }
+    }
+
+    // ---------------- 4. ระบบกล้องสแกนบาร์โค้ด (Html5-Qrcode) ----------------
+    let html5QrcodeScanner;
+
+    function startScanner() {
+        document.getElementById('reader').style.display = 'block';
+        document.getElementById('btnStartScan').classList.add('hidden');
+        document.getElementById('btnStopScan').classList.remove('hidden');
+
+        // สร้างกล่องสแกน ตั้งค่าให้สแกนไวขึ้น (fps: 10)
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+
+    function stopScanner() {
+        if(html5QrcodeScanner) {
+            html5QrcodeScanner.clear().catch(error => console.error("Failed to clear scanner. ", error));
+        }
+        document.getElementById('reader').style.display = 'none';
+        document.getElementById('btnStartScan').classList.remove('hidden');
+        document.getElementById('btnStopScan').classList.add('hidden');
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        // เมื่อสแกนติด ให้พักกล้องก่อนเพื่อไม่ให้มันสแกนรัวๆ จนแอปค้าง
+        stopScanner();
+
+        // เอาข้อความที่สแกนได้ ไปค้นหาในฐานข้อมูลของเรา
+        let foundIndex = inventoryData.findIndex(item => item.barcode === decodedText);
+        
+        if(foundIndex !== -1) {
+            // เจอสินค้า! แจ้งเตือนและถามเพื่อบวกสต็อก
+            let confirmAdd = confirm(`✅ พบสินค้า: ${inventoryData[foundIndex].name}\n\nคุณต้องการเพิ่มสต็อกเข้าไปอีก 1 ชิ้น ใช่หรือไม่?`);
+            if(confirmAdd) {
+                updateQty(foundIndex, 1);
+            }
+            } else {
+            // ไม่เจอสินค้าในระบบ ถามผู้ใช้ว่าต้องการสร้างใหม่เลยหรือไม่?
+            let confirmNew = confirm(`❌ สแกนได้รหัส: ${decodedText}\n\nไม่พบสินค้านี้ในระบบ คุณต้องการเพิ่มเป็นสินค้าใหม่หรือไม่?`);
+            
+            if(confirmNew) {
+                // 1. เอาเลขบาร์โค้ดที่สแกนได้ ไปใส่รอไว้ในช่อง "รหัสบาร์โค้ด" ทันที
+                document.getElementById('pBarcode').value = decodedText;
+                
+                // 2. สั่งให้ระบบสลับหน้าจอไปที่หน้า "เพิ่มสินค้าใหม่"
+                switchPage('page-add');
+                
+                // 3. (แถมทริค UX) สั่งให้เมาส์ไปกระพริบรอที่ช่อง "ชื่อสินค้า" จะได้พิมพ์ต่อได้เลยไม่ต้องใช้เมาส์คลิก
+                setTimeout(() => { document.getElementById('pName').focus(); }, 100);
+            }
+        }
+    }
+
+    function onScanFailure(error) {
+        // ฟังก์ชันนี้จะทำงานตลอดเวลาที่กล้องยังหาบาร์โค้ดไม่เจอ ปล่อยทิ้งไว้ไม่ต้องทำอะไรครับ
+    }
+
+    // ---------------- ฟังก์ชันลบรายการสินค้า ----------------
+    function deleteItem(index) {
+        let itemName = inventoryData[index].name;
+        let confirmDelete = confirm(`⚠️ ยืนยันการลบข้อมูล:\nคุณแน่ใจหรือไม่ที่จะลบ "${itemName}" ออกจากระบบ?`);
+        
+        if(confirmDelete) {
+            inventoryData.splice(index, 1);
+            saveToLocalStorage(); 
+            renderHome(); 
+            renderTable(); 
+        }
+    }
+
+    // ---------------- ฟังก์ชันเลือกส่งออกไฟล์ Excel / CSV ----------------
+    function exportData() {
+        if(inventoryData.length === 0) {
+            alert("ไม่มีข้อมูลให้ดาวน์โหลดครับ!");
+            return;
+        }
+
+        const format = document.getElementById('exportFormat').value;
+
+        // เตรียมข้อมูลให้เหมาะกับ Excel
+        let exportArr = inventoryData.map((item, index) => ({
+            "ลำดับ": index + 1,
+            "รหัสบาร์โค้ด": item.barcode || "-",
+            "ชื่อสินค้า": item.name,
+            "จำนวนคงเหลือ": parseInt(item.qty),
+            "หน่วยนับ": item.unit
+        }));
+
+        if (format === 'xlsx') {
+            // สร้างไฟล์ .xlsx ด้วย SheetJS
+            let worksheet = XLSX.utils.json_to_sheet(exportArr);
+            let workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Data");
+            XLSX.writeFile(workbook, "Stock_Report.xlsx");
+            
+        } else if (format === 'csv') {
+            // สร้างไฟล์ .csv
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "ลำดับ,รหัสบาร์โค้ด,ชื่อสินค้า,จำนวนคงเหลือ,หน่วยนับ\n";
+            inventoryData.forEach((item, index) => {
+                let barcode = item.barcode ? item.barcode : "-";
+                csvContent += `${index + 1},${barcode},${item.name},${item.qty},${item.unit}\n`;
+            });
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "Stock_Report.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+
+    // ---------------- ฟังก์ชันคัดลอกลง Google Sheets ----------------
+    function copyForGoogleSheets() {
+        if(inventoryData.length === 0) {
+            alert("ไม่มีข้อมูลให้คัดลอกครับ!");
+            return;
+        }
+
+        // ใช้ \t (Tab) คั่นข้อมูล เพื่อให้ Google Sheets เข้าใจว่าเป็นคนละคอลัมน์
+        let tsvText = "ลำดับ\tรหัสบาร์โค้ด\tชื่อสินค้า\tจำนวนคงเหลือ\tหน่วยนับ\n";
+        
+        inventoryData.forEach((item, index) => {
+            let barcode = item.barcode ? item.barcode : "-";
+            tsvText += `${index + 1}\t${barcode}\t${item.name}\t${item.qty}\t${item.unit}\n`;
+        });
+
+        // สั่งก๊อปปี้ลง Clipboard
+        navigator.clipboard.writeText(tsvText).then(() => {
+            alert("✅ คัดลอกข้อมูลเรียบร้อยแล้ว!\n\nเปิดหน้าเว็บ Google Sheets แล้วกดคลิกขวา -> วาง (หรือ Ctrl+V) ได้เลยครับ");
+        }).catch(err => {
+            alert("เกิดข้อผิดพลาดในการคัดลอก กรุณาลองใหม่ครับ");
+        });
+    }
+
+    // ---------------- 5. ควบคุมการเปลี่ยนหน้า และ เมนู ----------------
+    function switchPage(pageId) {
+        document.getElementById('page-home').classList.add('hidden');
+        document.getElementById('page-add').classList.add('hidden');
+        document.getElementById('page-list').classList.add('hidden');
+        
+        document.getElementById(pageId).classList.remove('hidden');
+        
+        if(pageId === 'page-home') renderHome();
+        if(pageId === 'page-list') renderTable();
+        
+        closeMenu(); 
+        stopScanner(); // เปลี่ยนหน้าปุ๊บ ปิดกล้องทันทีเพื่อประหยัดแบตเตอรี่
+    }
+
+    const dropdownMenu = document.getElementById('myDropdown');
+    const menuItems = document.querySelectorAll('.menu-item');
+    let isMenuOpen = false;
+    let focusIndex = 0;
+
+    function openMenu() { dropdownMenu.classList.add('show-menu'); isMenuOpen = true; updateFocus(0); }
+    function closeMenu() { dropdownMenu.classList.remove('show-menu'); isMenuOpen = false; menuItems.forEach(item => item.classList.remove('keyboard-focus')); }
+    function updateFocus(index) { menuItems.forEach(item => item.classList.remove('keyboard-focus')); if (menuItems[index]) { menuItems[index].classList.add('keyboard-focus'); focusIndex = index; } }
+    
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') { isMenuOpen ? closeMenu() : openMenu(); }
+        if (isMenuOpen) {
+            if (event.key === 'ArrowDown') { event.preventDefault(); updateFocus((focusIndex + 1) % menuItems.length); } 
+            else if (event.key === 'ArrowUp') { event.preventDefault(); updateFocus((focusIndex - 1 + menuItems.length) % menuItems.length); } 
+            else if (event.key === 'Enter') { menuItems[focusIndex].click(); }
+        }
+    });
+    // ---------------- ฟังก์ชันสร้างใบสั่งซื้อ (PO) ----------------
+    function generatePO() {
+        let orderItems = [];
+        
+        // วนลูปเช็คทุกแถวว่า มีการติ๊กถูกที่กล่องไหนบ้าง
+        inventoryData.forEach((item, index) => {
+            let checkbox = document.getElementById(`chk_${index}`);
+            let qtyInput = document.getElementById(`orderQty_${index}`);
+            
+            // 👇 สร้างตัวแปรมารับค่าจากช่องหน่วยที่เพิ่มมาใหม่
+            let unitInput = document.getElementById(`orderUnit_${index}`); 
+            
+            if (checkbox && checkbox.checked) {
+                let orderQty = parseInt(qtyInput.value);
+                let orderUnit = unitInput.value.trim(); // ดึงคำที่พิมพ์ในช่องหน่วยมาใช้
+                
+                // เช็คว่ากรอกตัวเลขสั่งซื้อมั่วมาไหม
+                if (isNaN(orderQty) || orderQty <= 0) {
+                    alert(`กรุณาระบุ "จำนวน" ให้ถูกต้อง สำหรับรายการ: ${item.name}`);
+                    return; 
+                }
+                // เช็คว่าเผลอลบหน่วยทิ้งจนว่างเปล่าหรือเปล่า
+                if (orderUnit === "") {
+                    alert(`กรุณาระบุ "หน่วย" สำหรับรายการ: ${item.name}`);
+                    return;
+                }
+                
+                // เก็บข้อมูลใส่ตะกร้าเตรียมทำใบสั่งซื้อ
+                orderItems.push({
+                    barcode: item.barcode || "-",
+                    name: item.name,
+                    qty: orderQty,
+                    unit: orderUnit // 👈 ใช้หน่วยใหม่ที่ผู้ใช้ระบุตอนสั่งซื้อ
+                });
+            }
+        });
+
+        // ถ้าไม่ได้ติ๊กเลยสักกล่อง
+        if (orderItems.length === 0) {
+            alert("⚠️ กรุณาติ๊กกล่องสี่เหลี่ยมเลือกสินค้า และระบุจำนวนสั่งซื้อก่อนครับ");
+            return;
+        }
+
+        // วาดรายการลงในกระดาษใบสั่งซื้อ
+        const poBody = document.getElementById('po-table-body');
+        poBody.innerHTML = '';
+        orderItems.forEach((order, index) => {
+            poBody.innerHTML += `
+                <tr>
+                    <td style="border: 1px solid #333; padding: 10px; text-align: center;">${index + 1}</td>
+                    <td style="border: 1px solid #333; padding: 10px;">${order.barcode}</td>
+                    <td style="border: 1px solid #333; padding: 10px;">${order.name}</td>
+                    <td style="border: 1px solid #333; padding: 10px; text-align: center; font-size: 18px;"><b>${order.qty}</b></td>
+                    <td style="border: 1px solid #333; padding: 10px; text-align: center;">${order.unit}</td>
+                </tr>
+            `;
+        });
+
+        // ใส่วันที่ปัจจุบัน
+        let today = new Date();
+        document.getElementById('po-date').innerText = "วันที่สั่งซื้อ: " + today.toLocaleDateString('th-TH');
+
+        // ปิดหน้าเก่า แล้วเปิดหน้าใบสั่งซื้อโชว์ขึ้นมา
+        document.getElementById('page-list').classList.add('hidden');
+        document.getElementById('page-po').classList.remove('hidden');
+    }
+</script>
+
+</body>
+</html>
